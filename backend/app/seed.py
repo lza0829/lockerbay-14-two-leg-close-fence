@@ -1,7 +1,8 @@
 import json
-from datetime import datetime, timezone
 
 from app.db import FIXTURES_DIR, connect
+from app.modules.two_leg_close_fence import migrate as fence_migrate
+from app.services import pipeline
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS settings (
@@ -76,11 +77,20 @@ def overdue_hours(conn) -> int:
     return int(row["value"]) if row else 48
 
 
+def pair_timeout_minutes(conn) -> int:
+    row = conn.execute("SELECT value FROM settings WHERE key='pair_timeout_minutes'").fetchone()
+    return int(row["value"]) if row else 30
+
+
 def init_db():
     conn = connect()
     conn.executescript(SCHEMA)
     if not conn.execute("SELECT 1 FROM settings WHERE key='overdue_hours'").fetchone():
         conn.execute("INSERT INTO settings(key, value) VALUES ('overdue_hours', '48')")
+    if not conn.execute("SELECT 1 FROM settings WHERE key='pair_timeout_minutes'").fetchone():
+        conn.execute("INSERT INTO settings(key, value) VALUES ('pair_timeout_minutes', '30')")
+    # 双腿栅栏建表 + 老账迁移；必须在写 settings 之后（迁移会读 settings）。
+    fence_migrate.migrate(conn)
     if conn.execute("SELECT COUNT(*) AS c FROM cabinets").fetchone()["c"] == 0:
         _seed(conn)
     conn.commit()
@@ -116,33 +126,5 @@ def _seed(conn):
                 "primary",
             ),
         )
-        if ev["event_type"] == "drop" and ev.get("cell_id"):
-            oid = f"OCC-{ev['cell_id']}-{ev['id']}"
-            conn.execute(
-                "INSERT INTO occupancies(id, cell_id, tracking_no, opened_at, closed_at, status, last_event_id) VALUES (?,?,?,?,?,?,?)",
-                (oid, ev["cell_id"], ev["tracking_no"], ev["event_ts"], None, "occupied", ev["id"]),
-            )
-            conn.execute("UPDATE cells SET status='occupied' WHERE id=?", (ev["cell_id"],))
-            conn.execute(
-                "INSERT INTO occupancy_proofs(occupancy_id, cell_id, tracking_no, opened_at, closed_at, event_ids_json, created_at) VALUES (?,?,?,?,?,?,?)",
-                (
-                    oid,
-                    ev["cell_id"],
-                    ev["tracking_no"],
-                    ev["event_ts"],
-                    None,
-                    json.dumps([ev["id"]], ensure_ascii=False),
-                    datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                ),
-            )
-        elif ev["event_type"] == "pickup" and ev.get("cell_id"):
-            row = conn.execute(
-                "SELECT id FROM occupancies WHERE cell_id=? AND status='occupied' ORDER BY opened_at DESC LIMIT 1",
-                (ev["cell_id"],),
-            ).fetchone()
-            if row:
-                conn.execute(
-                    "UPDATE occupancies SET closed_at=?, status='released', last_event_id=? WHERE id=?",
-                    (ev["event_ts"], ev["id"], row["id"]),
-                )
-                conn.execute("UPDATE cells SET status='free' WHERE id=?", (ev["cell_id"],))
+        pipeline.apply_event(conn, ev)
+

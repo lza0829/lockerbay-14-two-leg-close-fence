@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Body, HTTPException
 
 from app.db import connect
-from app.seed import overdue_hours
+from app.modules import two_leg_close_fence as fence
+from app.seed import overdue_hours, pair_timeout_minutes
 from app.services import bay as bay_svc
 from app.services import ingest as ingest_svc
 
@@ -14,6 +15,7 @@ def overview():
     try:
         data = bay_svc.overview(conn)
         data["overdue_hours"] = overdue_hours(conn)
+        data["two_leg"] = fence.overview(conn)
         return data
     finally:
         conn.close()
@@ -60,7 +62,9 @@ def list_quarantine():
     conn = connect()
     try:
         rows = conn.execute(
-            "SELECT id, reason, member_json, created_at FROM quarantine ORDER BY id DESC"
+            """SELECT id, reason, member_json, created_at, status, event_id, occupancy_id,
+                      candidate_id, resolved_at
+               FROM quarantine ORDER BY id DESC"""
         ).fetchall()
         return [dict(r) for r in rows]
     finally:
@@ -88,7 +92,90 @@ def run_ingest():
 def get_settings():
     conn = connect()
     try:
-        return {"overdue_hours": overdue_hours(conn)}
+        return {
+            "overdue_hours": overdue_hours(conn),
+            "pair_timeout_minutes": pair_timeout_minutes(conn),
+        }
+    finally:
+        conn.close()
+
+
+@router.put("/settings/pair-timeout")
+def put_pair_timeout(body: dict = Body(...)):
+    minutes = int(body.get("pair_timeout_minutes", 30))
+    if minutes < 1:
+        raise HTTPException(400, "配对超时至少 1 分钟")
+    conn = connect()
+    try:
+        conn.execute(
+            "INSERT OR REPLACE INTO settings(key, value) VALUES ('pair_timeout_minutes', ?)",
+            (str(minutes),),
+        )
+        conn.commit()
+        return {"pair_timeout_minutes": minutes}
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------- 双腿关闭栅栏
+
+@router.get("/close-legs")
+def list_close_legs(limit: int = 200):
+    conn = connect()
+    try:
+        return fence.list_legs(conn, limit)
+    finally:
+        conn.close()
+
+
+@router.get("/close-candidates")
+def list_close_candidates(limit: int = 200):
+    conn = connect()
+    try:
+        return fence.list_candidates(conn, limit)
+    finally:
+        conn.close()
+
+
+@router.get("/two-leg/quarantine")
+def list_two_leg_quarantine(limit: int = 200):
+    conn = connect()
+    try:
+        return fence.list_held_quarantine(conn, limit)
+    finally:
+        conn.close()
+
+
+@router.get("/two-leg/verify/{occupancy_id}")
+def verify_two_leg(occupancy_id: str):
+    conn = connect()
+    try:
+        result = fence.verify(conn, occupancy_id)
+        if result is None:
+            raise HTTPException(404, "占用不存在")
+        return result
+    finally:
+        conn.close()
+
+
+@router.get("/two-leg/audit")
+def audit_two_leg():
+    conn = connect()
+    try:
+        violations = fence.audit(conn)
+        return {"ok": not violations, "violations": violations}
+    finally:
+        conn.close()
+
+
+@router.post("/two-leg/sweep")
+def sweep_two_leg(body: dict | None = Body(default=None)):
+    conn = connect()
+    try:
+        timeout = (body or {}).get("timeout_minutes")
+        result = fence.sweep(conn, timeout)
+        conn.commit()
+        return result
     finally:
         conn.close()
 

@@ -14,7 +14,11 @@
   "events": [
     {"id": "E1", "cabinet_id": "CAB-A", "cell_id": "CAB-A-01", "event_type": "drop", "event_ts": "2026-11-18T08:00:00Z", "tracking_no": "TN1001", "payload": {}},
     {"id": "E2", "cabinet_id": "CAB-A", "cell_id": "CAB-A-02", "event_type": "drop", "event_ts": "2026-11-18T09:00:00Z", "tracking_no": "TN1002", "payload": {}},
+    {"id": "E4", "cabinet_id": "CAB-B", "cell_id": "CAB-B-01", "event_type": "drop", "event_ts": "2026-11-18T10:30:00Z", "tracking_no": "TN2001", "payload": {}},
     {"id": "E3", "cabinet_id": "CAB-A", "cell_id": "CAB-A-01", "event_type": "pickup", "event_ts": "2026-11-18T12:00:00Z", "tracking_no": "TN1001", "payload": {}},
-    {"id": "E4", "cabinet_id": "CAB-B", "cell_id": "CAB-B-01", "event_type": "drop", "event_ts": "2026-11-18T10:30:00Z", "tracking_no": "TN2001", "payload": {}}
+    {"id": "E5", "cabinet_id": "CAB-A", "cell_id": "CAB-A-03", "event_type": "drop", "event_ts": "2026-11-18T13:00:00Z", "tracking_no": "TN1003", "payload": {}},
+    {"id": "E6", "cabinet_id": "CAB-A", "cell_id": "CAB-A-03", "event_type": "pickup", "event_ts": "2026-11-18T13:20:00Z", "tracking_no": "TN1003", "payload": {}},
+    {"id": "E7", "cabinet_id": "CAB-A", "cell_id": "CAB-A-03", "event_type": "confirm", "event_ts": "2026-11-18T13:22:00Z", "tracking_no": "TN1003", "payload": {}},
+    {"id": "E8", "cabinet_id": "CAB-A", "cell_id": "CAB-A-02", "event_type": "confirm", "event_ts": "2026-11-18T14:00:00Z", "tracking_no": "TN9999", "payload": {}}
   ]
 }

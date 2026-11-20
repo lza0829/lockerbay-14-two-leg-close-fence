@@ -18,6 +18,15 @@ onMounted(async () => {
       <div class="stat"><b>{{ overview.free }}</b><span>空闲</span></div>
       <div class="stat"><b>{{ overview.open_occupancies }}</b><span>开放占用账</span></div>
     </div>
+    <div class="stats" v-if="overview?.two_leg">
+      <div class="stat"><b>{{ overview.two_leg.close_legs }}</b><span>双腿关闭边</span></div>
+      <div class="stat"><b>{{ overview.two_leg.pending_legs }}</b><span>待配对腿</span></div>
+      <div class="stat"><b>{{ overview.two_leg.held_quarantine }}</b><span>双腿搁置</span></div>
+      <div class="stat" :style="{ borderColor: overview.two_leg.violations ? 'var(--over)' : 'var(--line)' }">
+        <b :style="{ color: overview.two_leg.violations ? 'var(--over)' : 'var(--free)' }">{{ overview.two_leg.violations }}</b>
+        <span>栅栏违规</span>
+      </div>
+    </div>
     <section v-for="cab in bay" :key="cab.id" class="cabinet panel">
       <h2>{{ cab.label }} <small>{{ cab.id }} · {{ cab.site }}</small></h2>
       <div class="grid">
